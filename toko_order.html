@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Sales Order</title>
+
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* HEADER */
+.header{
+  position:sticky;
+  top:0;
+  background:var(--card);
+  padding:16px;
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+  z-index:20;
+}
+.header h2{
+  margin:0;
+  font-size:18px;
+}
+
+/* CONTENT */
+.container{
+  padding:16px;
+  padding-bottom:160px;
+}
+
+.form-group{
+  margin-bottom:14px;
+}
+label{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:600;
+}
+input{
+  width:100%;
+  margin-top:6px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid #e5e7eb;
+  font-size:15px;
+}
+input:focus{
+  outline:none;
+  border-color:var(--primary);
+}
+input[readonly]{
+  background:#f8fafc;
+}
+
+/* ITEM CARD */
+.item-card{
+  background:var(--card);
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:14px;
+  box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+
+.item-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+
+.stok{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.subtotal{
+  font-weight:800;
+  color:var(--primary);
+}
+
+/* DROPDOWN */
+.dropdown{position:relative;}
+.dropdown-list{
+  position:absolute;
+  top:100%;
+  left:0;
+  right:0;
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 8px 20px rgba(0,0,0,.15);
+  max-height:200px;
+  overflow:auto;
+  z-index:50;
+  display:none;
+}
+.dropdown-list div{
+  padding:12px;
+  border-bottom:1px solid #f1f5f9;
+}
+.dropdown-list div:hover{
+  background:#f1f5f9;
+}
+
+/* BUTTON */
+button{
+  border:none;
+  border-radius:16px;
+  padding:14px;
+  font-weight:700;
+  font-size:15px;
+}
+
+.btn-add{
+  width:100%;
+  background:var(--success);
+  color:#fff;
+  margin-top:10px;
+}
+
+.btn-delete{
+  background:var(--danger);
+  color:#fff;
+  padding:10px 14px;
+  font-size:14px;
+}
+
+/* FOOTER */
+.footer{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:var(--card);
+  box-shadow:0 -4px 12px rgba(0,0,0,.15);
+  padding:16px;
+}
+
+.total{
+  font-size:18px;
+  font-weight:900;
+  margin-bottom:10px;
+}
+
+.btn-save{
+  width:100%;
+  background:var(--primary);
+  color:#fff;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>Sales Order</h2>
+</div>
+
+<div class="container">
+
+  <div class="form-group">
+    <label>No SO</label>
+    <input id="no_so" readonly>
+  </div>
+
+  <div class="form-group">
+    <label>Customer</label>
+    <input id="customer" placeholder="Nama customer">
+  </div>
+
+  <div id="itemList"></div>
+
+  <button class="btn-add" onclick="tambahBaris()">＋ Tambah Barang</button>
+
+</div>
+
+<div class="footer">
+  <div class="total">Total: Rp <span id="total">0</span></div>
+  <button class="btn-save" onclick="simpan()">Simpan Sales Order</button>
+</div>
+
+<script>
+const URL_API="https://script.google.com/macros/s/AKfycbxV68i9_D-D8GsSUxmgVz6OajYqHhn64fvmnCMARE_P1kDcer-wT-a4vNtg5OsBAoJRCA/exec";
+let masterBarang=[];
+
+async function initForm(){
+  try{
+    const r1 = await fetch(URL_API);
+    masterBarang = await r1.json();
+
+    const r2 = await fetch(URL_API+"?type=so");
+    const so = await r2.json();
+    document.getElementById("no_so").value = so.no_so;
+
+    tambahBaris();
+  }catch(e){
+    alert("Gagal load data");
+    console.error(e);
+  }
+}
+
+function tambahBaris(){
+  const list = document.getElementById("itemList");
+  const div = document.createElement("div");
+  div.className = "item-card";
+  div.innerHTML = `
+    <div class="dropdown">
+      <input placeholder="Cari barang..." oninput="filterBarang(this)" autocomplete="off">
+      <div class="dropdown-list"></div>
+    </div>
+
+    <div class="item-row">
+      <span class="stok">Stok: <b>-</b></span>
+      <input type="number" value="1" min="1" oninput="hitung()">
+    </div>
+
+    <div class="item-row">
+      <input type="number" readonly placeholder="Harga">
+      <span class="subtotal">0</span>
+    </div>
+
+    <div class="item-row">
+      <button class="btn-delete" onclick="this.closest('.item-card').remove();hitung()">Hapus</button>
+    </div>
+  `;
+  list.appendChild(div);
+}
+
+function filterBarang(input){
+  const list = input.nextElementSibling;
+  const keyword = input.value.toLowerCase();
+  list.innerHTML="";
+  if(!keyword){ list.style.display="none"; return; }
+
+  masterBarang
+    .filter(b=>b.nama.toLowerCase().includes(keyword))
+    .forEach(b=>{
+      const div=document.createElement("div");
+      div.textContent=b.nama;
+      div.onclick=()=>{
+        input.value=b.nama;
+        const card=input.closest(".item-card");
+        card.querySelector(".stok b").innerText=b.stok;
+        card.querySelector("input[readonly]").value=b.harga;
+        list.style.display="none";
+        hitung();
+      };
+      list.appendChild(div);
+    });
+  list.style.display="block";
+}
+
+document.addEventListener("click",e=>{
+  document.querySelectorAll(".dropdown-list").forEach(d=>{
+    if(!d.contains(e.target) && !d.previousElementSibling.contains(e.target)){
+      d.style.display="none";
+    }
+  });
+});
+
+function hitung(){
+  let total=0;
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const stok=Number(card.querySelector(".stok b").innerText)||0;
+    const qtyInput=card.querySelector("input[type=number]:not([readonly])");
+    let qty=Number(qtyInput.value);
+    const harga=Number(card.querySelector("input[readonly]").value)||0;
+
+    if(qty>stok && stok>0){
+      qty=stok;
+      qtyInput.value=stok;
+      alert("Qty melebihi stok");
+    }
+
+    const subtotal=qty*harga;
+    card.querySelector(".subtotal").innerText=subtotal.toLocaleString("id-ID");
+    total+=subtotal;
+  });
+  document.getElementById("total").innerText=total.toLocaleString("id-ID");
+}
+
+function simpan(){
+  const items=[];
+  let total=0;
+
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const nama=card.querySelector("input").value;
+    const qty=Number(card.querySelector("input[type=number]:not([readonly])").value);
+    const harga=Number(card.querySelector("input[readonly]").value);
+    if(!nama||!qty||!harga) return;
+
+    const subtotal=qty*harga;
+    total+=subtotal;
+    items.push({nama,qty,harga,subtotal});
+  });
+
+  if(!document.getElementById("customer").value){
+    alert("Isi nama customer"); return;
+  }
+  if(items.length===0){
+    alert("Minimal 1 barang"); return;
+  }
+
+  fetch(URL_API,{
+    method:"POST",
+    body:JSON.stringify({
+      no_so:document.getElementById("no_so").value,
+      customer:document.getElementById("customer").value,
+      total,
+      items
+    })
+  })
+  .then(r=>r.json())
+  .then(()=>{
+    alert("Sales Order berhasil disimpan");
+    document.getElementById("customer").value="";
+    document.getElementById("itemList").innerHTML="";
+    document.getElementById("total").innerText="0";
+    fetch(URL_API+"?type=so")
+      .then(r=>r.json())
+      .then(d=>{
+        document.getElementById("no_so").value=d.no_so;
+        tambahBaris();
+      });
+  })
+  .catch(e=>alert("Error "+e));
+}
+
+window.onload=initForm;
+</script>
+</body>
+</html>

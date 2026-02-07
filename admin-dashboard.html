@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Penjualan</title>
+
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,sans-serif;
+  background:linear-gradient(180deg,#f8fafc,#eef2ff);
+  color:var(--text);
+  padding:16px;
+}
+
+/* HEADER */
+.header{margin-bottom:18px}
+.header h1{margin:0;font-size:24px;font-weight:900}
+.header p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+
+/* SUMMARY */
+.summary{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:14px;
+  margin-bottom:16px;
+}
+.summary-card{
+  background:#fff;
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 12px 28px rgba(0,0,0,.08);
+}
+.summary-card span{font-size:12px;color:var(--muted)}
+.summary-card strong{display:block;margin-top:6px;font-size:22px;font-weight:800}
+
+/* FILTER */
+.filter{
+  background:#fff;
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 10px 24px rgba(0,0,0,.08);
+  margin-bottom:20px;
+}
+.filter input{
+  width:100%;
+  padding:12px 14px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  font-size:14px;
+}
+.filter-row{display:flex;gap:10px;margin-top:12px}
+
+/* CARD */
+.so-card{
+  background:#fff;
+  border-radius:20px;
+  padding:16px;
+  margin-bottom:18px;
+  box-shadow:0 14px 32px rgba(0,0,0,.1);
+}
+.so-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+}
+.so-top strong{font-size:16px;font-weight:800}
+.badge{
+  background:#e0e7ff;
+  color:var(--primary);
+  padding:5px 10px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+}
+
+.meta{margin:8px 0 10px;font-size:13px;color:var(--muted)}
+.meta span{color:var(--text);font-weight:700}
+
+.items{border-top:1px dashed var(--border);padding-top:10px}
+.item{
+  display:grid;
+  grid-template-columns:1fr 50px auto;
+  gap:8px;
+  padding:8px 0;
+  font-size:14px;
+}
+.item:not(:last-child){border-bottom:1px solid #f1f5f9}
+.item small{font-size:12px;color:var(--muted)}
+
+.so-total{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:2px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+}
+.so-total strong{font-size:18px;color:var(--success);font-weight:900}
+
+/* PRINT BUTTON */
+.print-invoice{
+  margin-top:12px;
+  text-align:right;
+}
+.print-invoice button{
+  background:var(--primary);
+  color:#fff;
+  border:none;
+  padding:8px 14px;
+  border-radius:10px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+/* STATES */
+.loading,.error{text-align:center;padding:60px 0;font-weight:700}
+.error{color:var(--danger)}
+
+/* ===== PRINT MODE ===== */
+@media print{
+  body{background:#fff;padding:0}
+  .filter,.summary,.print-invoice{display:none}
+  .so-card{
+    box-shadow:none;
+    border:none;
+    margin:0;
+    page-break-after:always;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>📄 Dashboard Invoice</h1>
+  <p>Cetak invoice per Sales Order</p>
+</div>
+
+<div class="summary">
+  <div class="summary-card">
+    <span>Total Transaksi</span>
+    <strong id="sumOrder">0</strong>
+  </div>
+  <div class="summary-card">
+    <span>Total Omzet</span>
+    <strong id="sumOmzet">Rp 0</strong>
+  </div>
+</div>
+
+<div class="filter">
+  <input id="search" placeholder="Cari No SO, Customer, Barang">
+  <div class="filter-row">
+    <input type="date" id="dateFrom">
+    <input type="date" id="dateTo">
+  </div>
+</div>
+
+<div id="content">
+  <div class="loading">Memuat data...</div>
+</div>
+
+<script>
+const URL_API =
+"https://script.google.com/macros/s/AKfycbz_-jFRnXnEmyVEBRQKY-AIqhwi0yc2Flw3rXr0_mN98LICfl73AmiqH7qG7FVrKsjPiA/exec";
+
+let allData=[];
+
+/* UTIL */
+const norm=k=>String(k).toLowerCase().replace(/\s+/g,"").replace(/[^a-z0-9]/g,"");
+const num=v=>Number(v)||0;
+const parseDate=d=>{
+  if(!d) return null;
+  const p=d.split("/");
+  if(p.length===3) return new Date(`${p[2]}-${p[1]}-${p[0]}`);
+  return new Date(d);
+};
+
+/* LOAD */
+async function load(){
+  const res=await fetch(URL_API+"?type=salesorder");
+  const raw=await res.json();
+  allData=raw.map(r=>{
+    const o={};
+    for(let k in r) o[norm(k)]=r[k];
+    return o;
+  });
+  apply();
+}
+
+/* FILTER */
+function apply(){
+  const key=search.value.toLowerCase();
+  const f=dateFrom.value?new Date(dateFrom.value):null;
+  const t=dateTo.value?new Date(dateTo.value):null;
+
+  const data=allData.filter(r=>{
+    const txt=`${r.noso||""} ${r.customer||""} ${r.barang||""}`.toLowerCase();
+    if(key && !txt.includes(key)) return false;
+    const d=parseDate(r.tanggal);
+    if(f && d<f) return false;
+    if(t && d>t) return false;
+    return true;
+  });
+
+  render(data);
+}
+
+/* PRINT 1 INVOICE */
+function printInvoice(id){
+  document.querySelectorAll(".so-card").forEach(c=>{
+    c.style.display = c.dataset.id===id ? "block" : "none";
+  });
+  window.print();
+  document.querySelectorAll(".so-card").forEach(c=>c.style.display="block");
+}
+
+/* RENDER */
+function render(data){
+  content.innerHTML="";
+  if(!data.length){
+    content.innerHTML='<div class="error">Data tidak ditemukan</div>';
+    return;
+  }
+
+  const group={};
+  data.forEach(r=>{
+    const k=r.noso||"UNKNOWN";
+    if(!group[k]) group[k]=[];
+    group[k].push(r);
+  });
+
+  let omzet=0;
+
+  Object.keys(group).forEach(noSO=>{
+    const rows=group[noSO];
+    const h=rows[0];
+    const total=num(h.total);
+    omzet+=total;
+
+    let html=`
+    <div class="so-card" data-id="${noSO}">
+      <div class="so-top">
+        <strong>Invoice : ${noSO}</strong>
+        <span class="badge">${h.tanggal||"-"}</span>
+      </div>
+      <div class="meta">Customer: <span>${h.customer||"-"}</span></div>
+      <div class="items">
+    `;
+
+    rows.forEach(i=>{
+      html+=`
+      <div class="item">
+        <div>${i.barang||"-"}<br><small>Rp ${num(i.harga).toLocaleString("id-ID")}</small></div>
+        <div>x${num(i.qty)}</div>
+        <div>Rp ${num(i.subtotal).toLocaleString("id-ID")}</div>
+      </div>
+      `;
+    });
+
+    html+=`
+      </div>
+      <div class="so-total">
+        <span>Total</span>
+        <strong>Rp ${total.toLocaleString("id-ID")}</strong>
+      </div>
+      <div class="print-invoice">
+        <button onclick="printInvoice('${noSO}')">🖨 Cetak Invoice</button>
+      </div>
+    </div>
+    `;
+
+    content.insertAdjacentHTML("beforeend",html);
+  });
+
+  sumOrder.innerText=Object.keys(group).length;
+  sumOmzet.innerText="Rp "+omzet.toLocaleString("id-ID");
+}
+
+search.oninput=apply;
+dateFrom.onchange=apply;
+dateTo.onchange=apply;
+
+load();
+</script>
+
+</body>
+</html>

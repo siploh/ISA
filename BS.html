@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bad Stok dengan No. Invoice</title>
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f3f4f6;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+.container {
+    background: #ffffff;
+    padding: 30px 30px;
+    margin-top: 50px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    max-width: 600px;
+    width: 100%;
+}
+h2 { color: #16a34a; text-align: center; margin-bottom: 25px; }
+label { display: block; margin: 15px 0 5px 0; font-weight: 600; }
+input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #d1d5db; box-sizing: border-box; font-size: 14px; }
+input:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,0.2); }
+button {
+    margin-top: 15px;
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: #16a34a;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+}
+button:hover:not(:disabled){ background-color: #15803d; }
+button:disabled{ opacity:0.6; cursor:not-allowed; }
+button .spinner{
+    display:none;
+    width:18px; height:18px;
+    border:3px solid white;
+    border-top:3px solid rgba(255,255,255,0.3);
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+    position:absolute; top:50%; left:50%; margin-top:-9px; margin-left:-9px;
+}
+@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+.success{ color:#16a34a; margin-top:15px; font-weight:600; text-align:center; }
+.error{ color:#dc2626; margin-top:15px; font-weight:600; text-align:center; }
+#barangTable{ width:100%; margin-top:20px; border-collapse:collapse; }
+#barangTable th, #barangTable td{ border:1px solid #d1d5db; padding:8px; text-align:center; }
+#barangTable th{ background-color:#16a34a; color:white; }
+.removeBtn{ background-color:#dc2626; padding:5px 10px; border-radius:5px; cursor:pointer; color:white; }
+.removeBtn:hover{ background-color:#b91c1c; }
+#totalKeseluruhan{ margin-top:15px; font-weight:bold; text-align:right; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h2>Bad Stok</h2>
+
+    <label>No. Invoice:</label>
+    <input type="text" id="noInvoice" readonly>
+
+    <label>Nama Toko :</label>
+    <input list="tokoList" id="namaToko" placeholder="Masukkan nama toko">
+    <datalist id="tokoList"></datalist>
+
+    <label>Nama Barang :</label>
+    <input list="barangList" id="namaBarang" placeholder="Masukkan nama barang">
+    <datalist id="barangList"></datalist>
+
+    <label>Harga Barang:</label>
+    <input type="number" id="hargaBarang" placeholder="Masukkan harga">
+
+    <label>Jumlah Barang:</label>
+    <input type="number" id="jumlahBarang" placeholder="Masukkan jumlah">
+
+    <button id="addBtn" onclick="addBarang()">Tambah Barang</button>
+    <button id="submitBtn" onclick="submitAll()">Kirim Semua
+        <div class="spinner"></div>
+    </button>
+
+    <p id="responseMsg"></p>
+
+    <table id="barangTable">
+        <thead>
+            <tr>
+                <th>Nama Barang</th>
+                <th>Harga</th>
+                <th>Jumlah</th>
+                <th>Total</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <p id="totalKeseluruhan">Total Keseluruhan: 0</p>
+</div>
+
+<script>
+const scriptURL = 'https://script.google.com/macros/s/AKfycbxRqoGk0SjxJEE3rzWV4NRu8W9NSo3fubV1Jc5slsePuukBMB-UjjFC-5IApSFgpK6_/exec'; // Ganti dengan URL GAS
+let masterBarangData = [];
+let barangListInput = [];
+
+const submitBtn = document.getElementById('submitBtn');
+const spinner = submitBtn.querySelector('.spinner');
+
+// Generate invoice otomatis
+function generateInvoice() {
+    const now = new Date();
+    const y = now.getFullYear().toString().slice(-2);
+    const m = ("0"+(now.getMonth()+1)).slice(-2);
+    const d = ("0"+now.getDate()).slice(-2);
+    const h = ("0"+now.getHours()).slice(-2);
+    const min = ("0"+now.getMinutes()).slice(-2);
+    const s = ("0"+now.getSeconds()).slice(-2);
+    return `INV${y}${m}${d}${h}${min}${s}`;
+}
+document.getElementById('noInvoice').value = generateInvoice();
+
+// Load master data
+fetch(scriptURL)
+.then(res=>res.json())
+.then(data=>{
+    const tokoList = document.getElementById('tokoList');
+    const barangList = document.getElementById('barangList');
+
+    data.toko.forEach(t=>{
+        let opt = document.createElement('option');
+        opt.value = t;
+        tokoList.appendChild(opt);
+    });
+
+    masterBarangData = data.barang;
+
+    data.barang.forEach(b=>{
+        let opt = document.createElement('option');
+        opt.value = b.nama;
+        barangList.appendChild(opt);
+    });
+})
+.catch(err=>console.error("Gagal load master data:",err));
+
+document.getElementById('namaBarang').addEventListener('input', function(){
+    const nama = this.value;
+    const hargaInput = document.getElementById('hargaBarang');
+    const found = masterBarangData.find(b=>b.nama===nama);
+    if(found) hargaInput.value = found.harga;
+});
+
+function addBarang(){
+    const namaToko = document.getElementById('namaToko').value.trim();
+    const namaBarang = document.getElementById('namaBarang').value.trim();
+    const jumlahBarang = parseInt(document.getElementById('jumlahBarang').value);
+    const harga = parseFloat(document.getElementById('hargaBarang').value);
+    const responseMsg = document.getElementById('responseMsg');
+
+    if(!namaToko || !namaBarang || !jumlahBarang || !harga){
+        responseMsg.textContent = "Semua field harus diisi dengan benar!";
+        responseMsg.className = 'error';
+        return;
+    }
+
+    barangListInput.push({namaBarang, harga, jumlahBarang});
+    renderTable();
+
+    document.getElementById('namaBarang').value = '';
+    document.getElementById('hargaBarang').value = '';
+    document.getElementById('jumlahBarang').value = '';
+    document.getElementById('namaBarang').focus();
+
+    responseMsg.textContent = "Barang ditambahkan ke daftar!";
+    responseMsg.className = "success";
+}
+
+function renderTable(){
+    const tbody = document.querySelector('#barangTable tbody');
+    tbody.innerHTML = '';
+    let totalKeseluruhan = 0;
+
+    barangListInput.forEach((b,index)=>{
+        const total = b.harga * b.jumlahBarang;
+        totalKeseluruhan += total;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${b.namaBarang}</td>
+            <td>${b.harga}</td>
+            <td>${b.jumlahBarang}</td>
+            <td>${total}</td>
+            <td><span class="removeBtn" onclick="removeBarang(${index})">Hapus</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('totalKeseluruhan').textContent = "Total Keseluruhan: " + totalKeseluruhan;
+}
+
+function removeBarang(index){
+    barangListInput.splice(index,1);
+    renderTable();
+}
+
+function submitAll(){
+    const noInvoice = document.getElementById('noInvoice').value;
+    const namaToko = document.getElementById('namaToko').value.trim();
+    const responseMsg = document.getElementById('responseMsg');
+
+    if(!namaToko || barangListInput.length === 0){
+        responseMsg.textContent = "Nama Toko harus diisi dan daftar barang tidak boleh kosong!";
+        responseMsg.className = 'error';
+        return;
+    }
+
+    const dataToSend = barangListInput.map(b => ({
+        noInvoice,
+        namaToko,
+        namaBarang: b.namaBarang,
+        harga: b.harga,
+        jumlahBarang: b.jumlahBarang
+    }));
+
+    submitBtn.disabled = true;
+    spinner.style.display = "block";
+
+    fetch(scriptURL,{
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(dataToSend)
+    })
+    .then(()=>{
+        responseMsg.textContent = "Semua data berhasil dikirim!";
+        responseMsg.className = "success";
+
+        // reset form & table
+        document.getElementById('namaToko').value = '';
+        document.getElementById('namaBarang').value = '';
+        document.getElementById('hargaBarang').value = '';
+        document.getElementById('jumlahBarang').value = '';
+        barangListInput = [];
+        renderTable();
+
+        // generate invoice baru
+        document.getElementById('noInvoice').value = generateInvoice();
+
+        document.getElementById('namaToko').focus();
+    })
+    .catch(err=>{
+        responseMsg.textContent = "Gagal mengirim data.";
+        responseMsg.className = 'error';
+        console.error(err);
+    })
+    .finally(()=>{
+        submitBtn.disabled = false;
+        spinner.style.display = "none";
+    });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+const SHEET_MASTER = "MasterBarang";
+const SHEET_SO = "SalesOrder";
+
+/* =========================
+   GET DATA
+   ========================= */
+function doGet(e){
+  const type = e.parameter.type;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // ======================
+  // GENERATE NO SO
+  // ======================
+  if(type === "so"){
+    return ContentService
+      .createTextOutput(JSON.stringify({ no_so: generateNoSO() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ======================
+  // SALES ORDER DATA
+  // ======================
+  if(type === "salesorder"){
+    const sheet = ss.getSheetByName(SHEET_SO);
+    const values = sheet.getDataRange().getValues();
+
+    if(values.length <= 1){
+      return ContentService
+        .createTextOutput(JSON.stringify([]))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const headers = values.shift();
+    const result = values.map(row => {
+      const obj = {};
+      headers.forEach((h, i) => obj[h.trim()] = row[i]);
+      obj.Total = Number(row[7] || 0);
+      return obj;
+    });
+
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ======================
+  // MASTER BARANG
+  // ======================
+  const sheet = ss.getSheetByName(SHEET_MASTER);
+  const data = sheet.getDataRange().getValues();
+  const result = [];
+
+  for(let i = 1; i < data.length; i++){
+    result.push({
+      kode: data[i][0],
+      nama: data[i][1],
+      harga: Number(data[i][2]),
+      stok: Number(data[i][3])
+    });
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* =========================
+   POST DATA
+   ========================= */
+function doPost(e){
+  try{
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // ======================
+    // SIMPAN SALES ORDER & KURANGI STOK MASTER
+    // ======================
+    if(data.items && data.customer){
+      const sheetSO = ss.getSheetByName(SHEET_SO);
+      const sheetMaster = ss.getSheetByName(SHEET_MASTER);
+      const masterValues = sheetMaster.getDataRange().getValues();
+
+      const tanggal = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy");
+      let no_so = data.no_so || generateNoSO(); // pastikan ada no_so
+
+      let totalSO = 0;
+      data.items.forEach(item => totalSO += Number(item.subtotal));
+
+      // Simpan setiap item ke sheet SO
+      data.items.forEach(item => {
+        sheetSO.appendRow([
+          tanggal,
+          no_so,
+          data.customer,
+          item.Barang || item.nama || "", // dukung frontend lama/baru
+          Number(item.Qty || item.qty || 0),
+          Number(item.Harga || item.harga || 0),
+          Number(item.Subtotal || item.subtotal || 0),
+          totalSO
+        ]);
+
+        // Kurangi stok Master
+        for(let i = 1; i < masterValues.length; i++){
+          if(masterValues[i][1] === (item.Barang || item.nama)){
+            let currentStok = Number(masterValues[i][3]);
+            let newStok = currentStok - Number(item.Qty || item.qty);
+            if(newStok < 0) newStok = 0;
+            sheetMaster.getRange(i+1, 4).setValue(newStok);
+            break;
+          }
+        }
+      });
+
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: "success", no_so }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================
+    // TAMBAH MASTER BARANG
+    // ======================
+    if(data.action === "add" && data.item){
+      const sheet = ss.getSheetByName(SHEET_MASTER);
+      const values = sheet.getDataRange().getValues();
+
+      for(let i=1; i<values.length; i++){
+        if(values[i][0] === data.item.kode){
+          return ContentService
+            .createTextOutput(JSON.stringify({ status: "error", message: "Kode barang sudah ada" }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      sheet.appendRow([
+        data.item.kode,
+        data.item.nama,
+        Number(data.item.harga),
+        Number(data.item.stok)
+      ]);
+
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: "success" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================
+    // UPDATE MASTER BARANG (single item)
+    // ======================
+    if(data.action === "update" && data.item){
+      const sheet = ss.getSheetByName(SHEET_MASTER);
+      const values = sheet.getDataRange().getValues();
+      let updated = false;
+
+      for(let i = 1; i < values.length; i++){
+        if(values[i][0] === data.item.kode){
+          sheet.getRange(i+1, 2).setValue(data.item.nama);
+          sheet.getRange(i+1, 3).setValue(Number(data.item.harga));
+          sheet.getRange(i+1, 4).setValue(Number(data.item.stok));
+          updated = true;
+          break;
+        }
+      }
+
+      if(!updated){
+        sheet.appendRow([
+          data.item.kode,
+          data.item.nama,
+          Number(data.item.harga),
+          Number(data.item.stok)
+        ]);
+      }
+
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: "success" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================
+    // UPDATE MASTER BARANG (bulk)
+    // ======================
+    if(data.action === "update" && Array.isArray(data.items)){
+      const sheet = ss.getSheetByName(SHEET_MASTER);
+      sheet.clearContents();
+      sheet.appendRow(["Kode","Nama Barang","Harga","Stok"]);
+      data.items.forEach(b => {
+        sheet.appendRow([
+          b.kode,
+          b.nama,
+          Number(b.harga),
+          Number(b.stok)
+        ]);
+      });
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: "success" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "error", message: "Action tidak dikenali" }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err){
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/* =========================
+   GENERATE NO SO OTOMATIS
+   ========================= */
+function generateNoSO(){
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SO);
+  const lastRow = sheet.getLastRow();
+  const datePart = Utilities.formatDate(new Date(), "GMT+7", "ddMMyy");
+  let noSO = "SO" + datePart + "001";
+
+  if(lastRow > 1){
+    const lastNo = sheet.getRange(lastRow, 2).getValue();
+    if(lastNo){
+      const lastDatePart = lastNo.substring(2, 8);
+      let seq = parseInt(lastNo.substring(8), 10);
+      if(lastDatePart === datePart){
+        seq += 1;
+        noSO = "SO" + datePart + Utilities.formatString("%03d", seq);
+      }
+    }
+  }
+
+  return noSO;
+}
+

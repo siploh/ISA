@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Order</title>
+
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --muted:#64748b;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui;background:var(--bg);}
+
+.header{
+  position:sticky;top:0;background:#fff;padding:16px;
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+.container{padding:16px;padding-bottom:160px;}
+.form-group{margin-bottom:14px;}
+label{font-size:12px;color:var(--muted);font-weight:600;}
+input,select{
+  width:100%;margin-top:6px;padding:12px;
+  border-radius:14px;border:1px solid #e5e7eb;font-size:15px;
+}
+
+.item-card{
+  background:#fff;border-radius:18px;padding:14px;
+  margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+.item-row{display:flex;gap:8px;margin-top:10px;align-items:center;}
+.stok{font-size:12px;color:var(--muted);}
+.subtotal{font-weight:800;color:var(--primary);}
+
+.dropdown{position:relative;}
+.dropdown-list{
+  position:absolute;top:100%;left:0;right:0;
+  background:#fff;border-radius:14px;
+  box-shadow:0 8px 20px rgba(0,0,0,.15);
+  max-height:200px;overflow:auto;z-index:50;display:none;
+}
+.dropdown-list div{padding:12px;cursor:pointer;}
+.dropdown-list div:hover{background:#f1f5f9;}
+
+button{
+  border:none;border-radius:16px;
+  padding:14px;font-weight:700;font-size:15px;
+}
+.btn-add{width:100%;background:var(--success);color:#fff;margin-top:10px;}
+.btn-delete{background:var(--danger);color:#fff;}
+.footer{
+  position:fixed;bottom:0;left:0;right:0;
+  background:#fff;box-shadow:0 -4px 12px rgba(0,0,0,.15);
+  padding:16px;
+}
+.total{font-size:18px;font-weight:900;margin-bottom:10px;}
+.btn-save{width:100%;background:var(--primary);color:#fff;}
+
+/* ===== LOADING ===== */
+#loadingOverlay{
+  position:fixed;inset:0;
+  background:rgba(255,255,255,.85);
+  display:none;z-index:9999;
+  align-items:center;justify-content:center;
+  flex-direction:column;backdrop-filter:blur(4px);
+}
+.loader{
+  width:52px;height:52px;border-radius:50%;
+  border:5px solid #e5e7eb;
+  border-top:5px solid var(--primary);
+  animation:spin .8s linear infinite;
+  margin-bottom:12px;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-weight:700;color:#334155;}
+</style>
+</head>
+<body>
+
+<div class="header"><h2>Sales Order</h2></div>
+
+<div class="container">
+  <div class="form-group">
+    <label>No SO</label>
+    <input id="no_so" readonly>
+  </div>
+
+  <div class="form-group dropdown">
+    <label>Customer</label>
+    <input id="customer" placeholder="Cari customer..." autocomplete="off" oninput="filterCustomer(this)">
+    <div class="dropdown-list" id="customerList"></div>
+  </div>
+
+  <div id="itemList"></div>
+  <button class="btn-add" onclick="tambahBaris()">＋ Tambah Barang</button>
+</div>
+
+<div class="footer">
+  <div class="total">Total: Rp <span id="total">0</span></div>
+  <button class="btn-save" onclick="simpan()">Simpan Sales Order</button>
+</div>
+
+<!-- LOADING -->
+<div id="loadingOverlay">
+  <div class="loader"></div>
+  <div class="loading-text">Menyimpan data...</div>
+</div>
+
+<script>
+const URL_API="https://script.google.com/macros/s/AKfycbxNM7wmpQeJeI153ol083eNbvuPjBjlVkG9fiHm0Jh8sY7Q6xl2uUUR_CJVNdXSREc07Q/exec";
+
+let masterBarang=[], masterCustomer=[];
+const totalEl=document.getElementById("total");
+
+function showLoading(){
+  document.getElementById("loadingOverlay").style.display="flex";
+  document.body.style.pointerEvents="none";
+}
+function hideLoading(){
+  document.getElementById("loadingOverlay").style.display="none";
+  document.body.style.pointerEvents="auto";
+}
+
+async function initForm(){
+  try{
+    masterBarang = await (await fetch(URL_API)).json();
+    masterCustomer = await (await fetch(URL_API+"?type=customer")).json();
+    const so = await (await fetch(URL_API+"?type=so")).json();
+    no_so.value=so.no_so;
+    itemList.innerHTML="";
+    tambahBaris();
+  }catch(e){
+    alert("Gagal load data");
+  }
+}
+
+/* CUSTOMER */
+function filterCustomer(input){
+  const list=customerList;
+  const key=input.value.toLowerCase();
+  list.innerHTML="";
+  if(!key){list.style.display="none";return;}
+  masterCustomer.filter(c=>c.nama.toLowerCase().includes(key))
+  .forEach(c=>{
+    const d=document.createElement("div");
+    d.textContent=c.nama;
+    d.onclick=()=>{input.value=c.nama;list.style.display="none";}
+    list.appendChild(d);
+  });
+  list.style.display="block";
+}
+
+/* BARIS */
+function tambahBaris(){
+  const div=document.createElement("div");
+  div.className="item-card";
+  div.innerHTML=`
+  <div class="dropdown">
+    <input placeholder="Cari barang..." oninput="filterBarang(this)">
+    <div class="dropdown-list"></div>
+  </div>
+
+  <div class="item-row">
+    <span class="stok">Stok: <b>-</b></span>
+    <input type="number" value="1" min="1" class="qty" oninput="hitung()">
+  </div>
+
+  <div class="item-row">
+    <input type="number" readonly class="harga" placeholder="Harga">
+    <select class="diskon_type" onchange="ubahPlaceholder(this);hitung()">
+      <option value="persen">%</option>
+      <option value="rupiah">Rp</option>
+    </select>
+    <input type="number" class="diskon" value="0" oninput="hitung()" placeholder="Diskon %">
+    <span class="subtotal">0</span>
+  </div>
+
+  <div class="item-row">
+    <button class="btn-delete" onclick="this.closest('.item-card').remove();hitung()">Hapus</button>
+  </div>`;
+  itemList.appendChild(div);
+}
+
+function ubahPlaceholder(sel){
+  const d=sel.closest(".item-row").querySelector(".diskon");
+  d.placeholder=sel.value==="persen"?"Diskon %":"Diskon Rp";
+}
+
+/* BARANG */
+function filterBarang(input){
+  const list=input.nextElementSibling;
+  const key=input.value.toLowerCase();
+  list.innerHTML="";
+  if(!key){list.style.display="none";return;}
+  masterBarang.filter(b=>b.nama.toLowerCase().includes(key))
+  .forEach(b=>{
+    const d=document.createElement("div");
+    d.textContent=b.nama;
+    d.onclick=()=>{
+      const card=input.closest(".item-card");
+      input.value=b.nama;
+      card.querySelector(".stok b").innerText=b.stok;
+      card.querySelector(".harga").value=b.harga;
+      card.querySelector(".diskon").value=0;
+      list.style.display="none";
+      hitung();
+    };
+    list.appendChild(d);
+  });
+  list.style.display="block";
+}
+
+/* HITUNG */
+function hitung(){
+  let total=0;
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const stok=Number(card.querySelector(".stok b").innerText)||0;
+    let qty=Number(card.querySelector(".qty").value);
+    const harga=Number(card.querySelector(".harga").value)||0;
+    const diskon=Number(card.querySelector(".diskon").value)||0;
+    const tipe=card.querySelector(".diskon_type").value;
+
+    if(qty>stok && stok>0){
+      qty=stok; card.querySelector(".qty").value=stok;
+      alert("Qty melebihi stok");
+    }
+
+    let sub=qty*harga;
+    if(tipe==="persen") sub-=sub*(diskon/100);
+    else sub-=diskon;
+    if(sub<0) sub=0;
+
+    card.querySelector(".subtotal").innerText=sub.toLocaleString("id-ID");
+    total+=sub;
+  });
+  totalEl.innerText=total.toLocaleString("id-ID");
+}
+
+/* SIMPAN */
+function simpan(){
+  showLoading();
+
+  const items=[];
+  let total=0;
+
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const nama=card.querySelector(".dropdown input").value;
+    const qty=Number(card.querySelector(".qty").value);
+    const harga=Number(card.querySelector(".harga").value);
+    const diskon=Number(card.querySelector(".diskon").value)||0;
+    const tipe=card.querySelector(".diskon_type").value;
+    if(!nama||!qty||!harga) return;
+
+    let sub=qty*harga;
+    if(tipe==="persen") sub-=sub*(diskon/100);
+    else sub-=diskon;
+    if(sub<0) sub=0;
+
+    total+=sub;
+    items.push({nama,qty,harga,diskon,tipe,subtotal:sub});
+  });
+
+  if(!customer.value || items.length===0){
+    hideLoading(); alert("Lengkapi data"); return;
+  }
+
+  fetch(URL_API,{
+    method:"POST",
+    body:JSON.stringify({
+      no_so:no_so.value,
+      customer:customer.value,
+      total, items
+    })
+  })
+  .then(r=>r.json())
+  .then(()=>{
+    hideLoading();
+    alert("Sales Order berhasil disimpan");
+    customer.value="";
+    itemList.innerHTML="";
+    totalEl.innerText="0";
+    initForm();
+  })
+  .catch(()=>{
+    hideLoading();
+    alert("Gagal simpan data");
+  });
+}
+
+/* GLOBAL */
+document.addEventListener("click",e=>{
+  document.querySelectorAll(".dropdown-list").forEach(d=>{
+    if(!d.contains(e.target) && !d.previousElementSibling.contains(e.target)){
+      d.style.display="none";
+    }
+  });
+});
+
+window.onload=initForm;
+</script>
+</body>
+</html>

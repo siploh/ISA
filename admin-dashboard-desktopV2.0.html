@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bawah Tangga Production</title>
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:var(--bg);color:var(--text)}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:240px;background:#020617;color:#e5e7eb;padding:20px;transition:.3s}
+.sidebar.collapsed{width:70px}
+.logo{font-weight:900;margin-bottom:30px}
+.menu a{display:block;padding:12px;border-radius:10px;color:#cbd5f5;text-decoration:none;margin-bottom:6px;cursor:pointer}
+.menu a.active,.menu a:hover{background:#1e40af;color:#fff}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{background:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.toggle{cursor:pointer;font-size:18px}
+.page{display:none;flex:1;overflow:auto}
+.page.active{display:block}
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.08);margin-bottom:18px}
+small{color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.header{position:sticky;top:0;background:#fff;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.08);z-index:10}
+.container{padding:16px;padding-bottom:180px}
+.form-group{margin-bottom:14px}
+label{font-size:12px;color:var(--muted);font-weight:600}
+input{width:100%;margin-top:6px;padding:12px;border-radius:14px;border:1px solid var(--border)}
+input[readonly]{background:#f8fafc}
+.item-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.item-row{display:flex;justify-content:space-between;gap:10px;margin-top:10px}
+.stok{font-size:12px;color:var(--muted)}
+.subtotal{font-weight:900;color:var(--primary)}
+button{border:none;border-radius:16px;padding:14px;font-weight:700;cursor:pointer}
+.btn-add{width:100%;background:var(--success);color:#fff;margin-top:10px}
+.btn-delete{background:var(--danger);color:#fff}
+.footer{position:fixed;bottom:0;left:240px;right:0;background:#fff;padding:16px;box-shadow:0 -4px 12px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:8px}
+.sidebar.collapsed ~ .main .footer{left:70px}
+.dropdown{position:relative}
+.dropdown-list{position:absolute;top:100%;left:0;right:0;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.15);max-height:200px;overflow:auto;z-index:50;display:none}
+.dropdown-list div{padding:12px;border-bottom:1px solid #f1f5f9;cursor:pointer}
+.dropdown-list div:hover{background:#f1f5f9}
+#loading{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;z-index:9999}
+.loader-box{background:#fff;padding:24px;border-radius:18px;text-align:center;width:230px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.spinner{width:42px;height:42px;border:4px solid #e5e7eb;border-top:4px solid var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.highlight{background:yellow}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">BAWAH TANGGA</div>
+    <nav class="menu">
+      <a class="active" onclick="showPage('dashboard',this)">Dashboard</a>
+      <a onclick="showPage('sales',this)">Sales Order</a>
+      <a onclick="showPage('laporan',this)">Laporan</a>
+      <a onclick="showPage('master',this)">Master Barang</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="toggle" onclick="toggleSidebar()">☰</div>
+      <b>CV. Ihsan Sukses Abadi</b>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="page active">
+      <div style="padding:24px">
+        <div class="grid">
+          <div class="card"><small>Total Sales Order</small><h2 id="dashSO">0</h2></div>
+          <div class="card"><small>Total Omzet</small><h2>Rp <span id="dashOmzet">0</span></h2></div>
+          <div class="card"><small>Rata-rata</small><h2>Rp <span id="dashAvg">0</span></h2></div>
+        </div>
+        <div class="card" style="margin-top:24px">
+          <h3>Sales Order Terakhir</h3>
+          <table><tbody id="dashLast"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SALES ORDER -->
+    <section id="sales" class="page">
+      <div class="header"><h2>Sales Order</h2></div>
+      <div class="container">
+        <div class="form-group"><label>No SO</label><input id="no_so" readonly></div>
+        <div class="form-group"><label>Customer</label><input id="customer" placeholder="Nama customer"></div>
+        <div id="itemList"></div>
+        <button class="btn-add" onclick="tambahBaris()">＋ Tambah Barang</button>
+      </div>
+      <div class="footer">
+        <b>Total: Rp <span id="total">0</span></b>
+        <button onclick="simpan()" style="width:100%;margin-top:10px;background:var(--primary);color:#fff">Simpan</button>
+      </div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section id="laporan" class="page">
+      <div style="padding:24px">
+        <div class="card">
+          <h2>Laporan Sales Order</h2>
+          <table>
+            <thead><tr><th>No SO</th><th>Customer</th><th>Total</th><th>Aksi</th></tr></thead>
+            <tbody id="laporanData"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MASTER BARANG -->
+    <section id="master" class="page">
+      <div style="padding:24px">
+        <div class="card">
+          <h2>Master Barang</h2>
+          <div class="form-group">
+            <label>Cari Barang</label>
+            <div style="display:flex;gap:6px">
+              <input id="searchMaster" placeholder="Masukkan kode atau nama barang...">
+              <button onclick="cariMasterBarang()" style="background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;">Cari</button>
+              <button onclick="resetMasterBarang()" style="background:#64748b;color:#fff;padding:10px 16px;border-radius:10px;">Reset</button>
+            </div>
+          </div>
+          <button onclick="updateMasterBarang()" style="background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:10px;">Update Database</button>
+          <table>
+            <thead>
+              <tr>
+                <th>Kode</th>
+                <th>Nama Barang</th>
+                <th>Harga</th>
+                <th>Stok</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="masterData"></tbody>
+          </table>
+          <h3>Tambah Barang Baru</h3>
+          <div class="form-group"><label>Kode</label><input id="newKode"></div>
+          <div class="form-group"><label>Nama Barang</label><input id="newNama"></div>
+          <div class="form-group"><label>Harga</label><input type="number" id="newHarga"></div>
+          <div class="form-group"><label>Stok</label><input type="number" id="newStok"></div>
+          <button style="background:var(--success);color:#fff;padding:10px 16px;border-radius:10px;" onclick="tambahBarang()">Tambah Barang</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="loading">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <b>Menyimpan…</b>
+  </div>
+</div>
+
+<script>
+const URL_API="https://script.google.com/macros/s/AKfycbwtD10ehZt52jU_53X77__K5y3AehBhedML1VV2vy0p1i66bOZ8ZmngKyyL_25h3ZdmMw/exec";
+let masterBarang=[];
+
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.menu a').forEach(a=>a.classList.remove('active'));
+  el.classList.add('active');
+  if(id==="dashboard") loadDashboard();
+  if(id==="laporan") loadLaporan();
+  if(id==="master") updateMasterBarang();
+  if(id==="sales") updateMasterBarang().then(()=>{if(itemList.children.length===0) tambahBaris();});
+}
+function toggleSidebar(){sidebar.classList.toggle("collapsed");}
+
+// ===== MASTER BARANG =====
+function loadMasterBarang(data=masterBarang, highlight=""){
+  masterData.innerHTML = data.map((b, idx)=>{
+    let namaText = b.nama || "";
+    if(highlight){
+      const safe = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+      const regex = new RegExp(`(${safe})`, "gi");
+      namaText = namaText.replace(regex, `<span class="highlight">$1</span>`);
+    }
+    return `<tr>
+      <td>${b.kode || ""}</td>
+      <td ondblclick="inlineEdit(this,'nama',${idx})">${namaText}</td>
+      <td ondblclick="inlineEdit(this,'harga',${idx})">${Number(b.harga||0).toLocaleString("id-ID")}</td>
+      <td ondblclick="inlineEdit(this,'stok',${idx})">${Number(b.stok||0)}</td>
+      <td>
+        <button onclick="saveInlineEdit(${idx})" style="background:#16a34a;color:#fff;border-radius:8px;padding:4px 8px">Simpan</button>
+        <button onclick="updateMasterBarang()" style="background:#dc2626;color:#fff;border-radius:8px;padding:4px 8px">Batal</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+// Pencarian & Reset Master Barang
+function cariMasterBarang(){
+  const key = document.getElementById("searchMaster").value.trim().toLowerCase();
+  if(!key){ loadMasterBarang(masterBarang); return; }
+  const filtered = masterBarang.filter(b => {
+    const kode = (b.kode || "").toString().toLowerCase();
+    const nama = (b.nama || "").toString().toLowerCase();
+    return kode.includes(key) || nama.includes(key);
+  });
+  loadMasterBarang(filtered, key);
+}
+function resetMasterBarang(){
+  document.getElementById("searchMaster").value = "";
+  loadMasterBarang(masterBarang);
+}
+
+function inlineEdit(cell, field, index){
+  const current = cell.innerText;
+  if(cell.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type = field==='nama'?'text':'number';
+  input.value = (field==='harga'||field==='stok')?Number(current):current;
+  input.style.width="100%";
+  const validate = ()=>{
+    let val = input.value;
+    if(field==='nama'){ val=val.trim(); if(!val){ alert("Nama barang tidak boleh kosong"); input.value=current; return false;}}
+    if(field==='harga'){ val=Number(val); if(val<=0){ alert("Harga harus > 0"); input.value=current; return false;}}
+    if(field==='stok'){ val=Number(val); if(val<0){ alert("Stok tidak boleh negatif"); input.value=current; return false;}}
+    return true;
+  };
+  input.onblur = validate;
+  input.onkeydown = e=>{if(e.key==='Enter'){if(validate()) saveInlineEdit(index);}};
+  cell.innerHTML=""; cell.appendChild(input); input.focus();
+}
+
+async function saveInlineEdit(index){
+  const tr = masterData.children[index];
+  const kode = masterBarang[index].kode;
+  const namaCell = tr.children[1], hargaCell=tr.children[2], stokCell=tr.children[3];
+  const nama = namaCell.querySelector('input')?.value.trim()||namaCell.innerText;
+  const harga = Number(hargaCell.querySelector('input')?.value||hargaCell.innerText);
+  const stok = Number(stokCell.querySelector('input')?.value||stokCell.innerText);
+  if(!nama||!harga||!stok){ alert("Isi semua field"); return; }
+  try{
+    loading.style.display="flex";
+    const res = await fetch(URL_API,{method:"POST",body:JSON.stringify({action:"update",item:{kode,nama,harga,stok}})});
+    const data = await res.json();
+    if(data.status==="success"){ alert("Barang berhasil diupdate!"); await updateMasterBarang(); }
+    else alert("Gagal update: "+(data.message||"Error"));
+  }catch(e){alert("Gagal update: "+e.message);} finally{loading.style.display="none";}
+}
+
+// ===== TAMBahkan BARANG =====
+async function tambahBarang(){
+  const kode = newKode.value.trim();
+  const nama = newNama.value.trim();
+  const harga = Number(newHarga.value);
+  const stok = Number(newStok.value);
+
+  if(!kode || !nama || !harga || !stok){
+    alert("Isi semua field");
+    return;
+  }
+
+  loading.style.display = "flex";
+
+  try {
+    const res = await fetch(URL_API, {
+      method: "POST",
+      body: JSON.stringify({ action: "add", item: { kode, nama, harga, stok } })
+    });
+    const data = await res.json();
+
+    if(data.status === "success"){
+      alert("Barang berhasil ditambahkan!");
+      await updateMasterBarang();
+      newKode.value = newNama.value = newHarga.value = newStok.value = "";
+    } else {
+      alert("Gagal menambahkan barang: " + (data.message || "Error"));
+    }
+  } catch(e) {
+    alert("Gagal menambahkan barang: " + e.message);
+  } finally {
+    loading.style.display = "none";
+  }
+}
+
+// ===== UPDATE MASTER BARANG =====
+async function updateMasterBarang(){
+  try{
+    loading.style.display="flex";
+    const res = await fetch(URL_API+"?type=masterbarang");
+    const data = await res.json();
+    masterBarang = data.map(b=>({kode:b.Kode||b.kode||"", nama:b["Nama Barang"]||b.nama||"", harga:Number(b.Harga||b.harga||0), stok:Number(b.Stok||b.stok||0)}));
+    loadMasterBarang();
+    syncHargaSO();
+  }catch(e){alert("Gagal update master: "+e.message);} finally{loading.style.display="none";}
+}
+
+function syncHargaSO(){
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const nama = card.querySelector(".dropdown input").value;
+    if(!nama) return;
+    const barang = masterBarang.find(b=>b.nama===nama);
+    if(barang){
+      card.querySelector("input[readonly]").value=barang.harga;
+      card.querySelector(".stok b").innerText=barang.stok;
+      const qtyInput=card.querySelector("input[type=number]:not([readonly])");
+      if(Number(qtyInput.value)>barang.stok){ qtyInput.value=barang.stok; alert("Qty disesuaikan sesuai stok"); }
+    }
+  });
+  hitung();
+}
+
+// ===== SALES ORDER =====
+function tambahBaris(){
+  const d=document.createElement("div"); d.className="item-card";
+  d.innerHTML=`<div class="dropdown">
+<input placeholder="Cari barang..." oninput="filterBarang(this)">
+<div class="dropdown-list"></div>
+</div>
+<div class="item-row"><span class="stok">Stok: <b>0</b></span><input type="number" value="1" min="1" oninput="hitung()"></div>
+<div class="item-row"><input type="number" readonly placeholder="Harga"><span class="subtotal">0</span></div>
+<div class="item-row"><button class="btn-delete" onclick="this.closest('.item-card').remove();hitung()">Hapus</button></div>`;
+  itemList.appendChild(d);
+}
+
+function filterBarang(input){
+  const list=input.nextElementSibling; const key=input.value.toLowerCase(); list.innerHTML="";
+  if(!key){list.style.display="none"; return;}
+  masterBarang.filter(b=>b.nama.toLowerCase().includes(key)).forEach(b=>{
+    const div=document.createElement("div"); div.textContent=b.nama;
+    div.onclick=()=>{ input.value=b.nama; const card=input.closest(".item-card"); card.querySelector(".stok b").innerText=b.stok; card.querySelector("input[readonly]").value=b.harga; list.style.display="none"; hitung(); };
+    list.appendChild(div);
+  });
+  list.style.display=list.children.length?"block":"none";
+}
+
+document.addEventListener("click",e=>{
+  document.querySelectorAll(".dropdown-list").forEach(d=>{
+    if(!d.contains(e.target)&&!d.previousElementSibling.contains(e.target)) d.style.display="none";
+  });
+});
+
+function hitung(){
+  let total=0;
+  document.querySelectorAll(".item-card").forEach(c=>{
+    const harga=Number(c.querySelector("input[readonly]").value)||0;
+    let qty=Number(c.querySelector("input[type=number]:not([readonly])").value)||0;
+    const stok=Number(c.querySelector(".stok b").innerText)||0;
+    if(qty>stok) { qty=stok; c.querySelector("input[type=number]:not([readonly])").value=stok; }
+    c.querySelector(".subtotal").innerText=(qty*harga).toLocaleString("id-ID");
+    total+=qty*harga;
+  });
+  totalEl=document.getElementById("total"); if(totalEl) totalEl.innerText=total.toLocaleString("id-ID");
+}
+
+async function simpan(){
+  const items=[]; let totalSum=0;
+  document.querySelectorAll(".item-card").forEach(c=>{
+    const nama=c.querySelector(".dropdown input").value;
+    const qty=Number(c.querySelector("input[type=number]:not([readonly])").value);
+    const harga=Number(c.querySelector("input[readonly]").value);
+    if(!nama||!qty||!harga) return;
+    items.push({nama,qty,harga,subtotal:qty*harga}); totalSum+=qty*harga;
+  });
+  if(!customer.value){alert("Isi nama customer"); return;}
+  if(items.length===0){alert("Minimal 1 barang"); return;}
+  loading.style.display="flex";
+  fetch(URL_API,{method:"POST",body:JSON.stringify({no_so:no_so.value,customer:customer.value,total:totalSum,items})})
+    .then(r=>r.json()).then(res=>{if(res.status==="success"){alert("SO berhasil disimpan");customer.value="";itemList.innerHTML="";total.innerText="0";} return fetch(URL_API+"?type=so");})
+    .then(r=>r.json()).then(d=>{no_so.value=d.no_so;tambahBaris();})
+    .catch(()=>alert("Gagal menyimpan")).finally(()=>loading.style.display="none");
+}
+
+// ===== DASHBOARD & LAPORAN =====
+async function loadDashboard(){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder"); const raw=await res.json();
+    const data=raw.map(r=>({tanggal:r["Tanggal"]||r["tanggal"]||"", no_so:r["No SO"]||r["no_so"]||"", customer:r["Customer"]||r["customer"]||"", total:Number(r["Total"]||r["total"]||0)}));
+    const map={}; data.forEach(r=>{if(!r.no_so) return; if(!map[r.no_so]) map[r.no_so]={no_so:r.no_so,customer:r.customer,total:0}; map[r.no_so].total+=r.total;});
+    const grouped=Object.values(map);
+    dashSO.innerText=grouped.length;
+    const omzet=grouped.reduce((a,b)=>a+b.total,0);
+    dashOmzet.innerText=omzet.toLocaleString("id-ID");
+    dashAvg.innerText=grouped.length?Math.round(omzet/grouped.length).toLocaleString("id-ID"):"0";
+    dashLast.innerHTML=""; grouped.slice(-5).reverse().forEach(d=>{dashLast.innerHTML+=`<tr><td>${d.no_so}</td><td>${d.customer||"-"}</td><td>Rp ${d.total.toLocaleString("id-ID")}</td></tr>`;});
+  }catch(e){dashSO.innerText=dashOmzet.innerText=dashAvg.innerText="0"; dashLast.innerHTML="<tr><td colspan=3>Error load data</td></tr>";}
+}
+
+async function loadLaporan(){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder"); const raw=await res.json();
+    const data=raw.map(r=>({ no_so:r["No SO"]||r["no_so"]||"", customer:r["Customer"]||r["customer"]||"", total:Number(r["Total"]||r["total"]||0) }));
+    const map={}; data.forEach(r=>{if(!r.no_so) return; if(!map[r.no_so]) map[r.no_so]={no_so:r.no_so,customer:r.customer,total:0}; map[r.no_so].total+=r.total;});
+    const grouped=Object.values(map);
+    laporanData.innerHTML=grouped.map(d=>`<tr><td>${d.no_so}</td><td>${d.customer||"-"}</td><td>Rp ${d.total.toLocaleString("id-ID")}</td><td><button onclick="printInvoice('${d.no_so}')">Print</button></td></tr>`).join("");
+  }catch(e){laporanData.innerHTML="<tr><td colspan=4>Error load data</td></tr>";}
+}
+
+// ===== PRINT INVOICE DENGAN LOGO LOKAL =====
+async function printInvoice(noSO){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder"); 
+    const raw=await res.json();
+    const data=raw.filter(r=>(r["No SO"]||r["no_so"])===noSO); 
+    if(data.length===0){alert("Data tidak ditemukan"); return;}
+    
+    const customer=data[0]["Customer"]||data[0]["customer"]||"-";
+    const tanggal=data[0]["Tanggal"]||data[0]["tanggal"]||"-";
+    const items=data.map(r=>({
+      nama:r["Barang"]||r["barang"]||"", 
+      qty:Number(r["Qty"]||r["qty"]||0), 
+      harga:Number(r["Harga"]||r["harga"]||0), 
+      subtotal:Number(r["Subtotal"]||r["subtotal"]||0)
+    }));
+    const total = items.reduce((a,b)=>a+b.subtotal,0);
+
+    const html = `
+<html>
+<head>
+<title>Invoice ${noSO}</title>
+<style>
+body{font-family:Arial,sans-serif;padding:20px;color:#000}
+header{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+header img{width:80px;height:auto}
+h1{margin:0;font-size:24px;color:#2563eb}
+h3{margin:5px 0;font-weight:normal;color:#555}
+table{width:100%;border-collapse:collapse;margin-top:20px}
+th,td{border:1px solid #333;padding:8px;text-align:left}
+th{background:#f0f0f0}
+tfoot td{font-weight:bold}
+</style>
+</head>
+<body>
+<header>
+  <img src="img/logo.png" alt="Logo">
+  <div>
+    <h1>CV. Ihsan Sukses Abadi</h1>
+    <h3>Invoice: ${noSO}</h3>
+  </div>
+</header>
+<p><strong>Customer:</strong> ${customer}</p>
+<p><strong>Tanggal:</strong> ${tanggal}</p>
+<table>
+<thead>
+<tr><th>No</th><th>Barang</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr>
+</thead>
+<tbody>
+${items.map((i,idx)=>`<tr>
+<td>${idx+1}</td>
+<td>${i.nama}</td>
+<td>${i.qty}</td>
+<td>Rp ${i.harga.toLocaleString("id-ID")}</td>
+<td>Rp ${i.subtotal.toLocaleString("id-ID")}</td>
+</tr>`).join("")}
+</tbody>
+<tfoot>
+<tr><td colspan=4>Total</td><td>Rp ${total.toLocaleString("id-ID")}</td></tr>
+</tfoot>
+</table>
+<footer style="margin-top:20px;font-size:12px;color:#555;text-align:center">
+Terima kasih telah melakukan transaksi dengan CV. Ihsan Sukses Abadi.
+</footer>
+</body>
+</html>
+`;
+
+    const w=window.open(); 
+    w.document.write(html); 
+    w.document.close(); 
+    w.focus(); 
+    w.print();
+
+  }catch(e){
+    alert("Gagal print invoice: "+e.message);
+  }
+}
+
+// ===== INIT =====
+window.onload=async ()=>{
+  try{await updateMasterBarang(); if(itemList.children.length===0) tambahBaris();}catch(e){alert("Gagal load data")}
+};
+</script>
+</body>
+</html>

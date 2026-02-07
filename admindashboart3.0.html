@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bawah Tangga Production</title>
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:var(--bg);color:var(--text)}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:240px;background:#020617;color:#e5e7eb;padding:20px;transition:.3s}
+.sidebar.collapsed{width:70px}
+.logo{font-weight:900;margin-bottom:30px}
+.menu a{display:block;padding:12px;border-radius:10px;color:#cbd5f5;text-decoration:none;margin-bottom:6px;cursor:pointer}
+.menu a.active,.menu a:hover{background:#1e40af;color:#fff}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{background:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.toggle{cursor:pointer;font-size:18px}
+.page{display:none;flex:1;overflow:auto}
+.page.active{display:block}
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.08);margin-bottom:18px}
+small{color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.header{position:sticky;top:0;background:#fff;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.08);z-index:10}
+.container{padding:16px;padding-bottom:180px}
+.form-group{margin-bottom:14px}
+label{font-size:12px;color:var(--muted);font-weight:600}
+input{width:100%;margin-top:6px;padding:12px;border-radius:14px;border:1px solid var(--border)}
+input[readonly]{background:#f8fafc}
+.item-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.item-row{display:flex;justify-content:space-between;gap:10px;margin-top:10px;align-items:center}
+.stok{font-size:12px;color:var(--muted)}
+.subtotal{font-weight:900;color:var(--primary)}
+button{border:none;border-radius:16px;padding:10px;font-weight:700;cursor:pointer}
+.btn-add{width:100%;background:var(--success);color:#fff;margin-top:10px}
+.btn-delete{background:var(--danger);color:#fff}
+.footer{position:fixed;bottom:0;left:240px;right:0;background:#fff;padding:16px;box-shadow:0 -4px 12px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:8px}
+.sidebar.collapsed ~ .main .footer{left:70px}
+#loading{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;z-index:9999}
+.loader-box{background:#fff;padding:24px;border-radius:18px;text-align:center;width:230px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.spinner{width:42px;height:42px;border:4px solid #e5e7eb;border-top:4px solid var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+.highlight{background:yellow}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">BAWAH TANGGA</div>
+    <nav class="menu">
+      <a class="active" onclick="showPage('dashboard',this)">Dashboard</a>
+      <a onclick="showPage('sales',this)">Sales Order</a>
+      <a onclick="showPage('laporan',this)">Laporan</a>
+      <a onclick="showPage('master',this)">Master Barang</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="toggle" onclick="toggleSidebar()">☰</div>
+      <b>CV. Ihsan Sukses Abadi</b>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="page active">
+      <div style="padding:24px">
+        <div class="grid">
+          <div class="card"><small>Total Sales Order</small><h2 id="dashSO">0</h2></div>
+          <div class="card"><small>Total Omzet</small><h2>Rp <span id="dashOmzet">0</span></h2></div>
+          <div class="card"><small>Rata-rata</small><h2>Rp <span id="dashAvg">0</span></h2></div>
+        </div>
+        <div class="card" style="margin-top:24px">
+          <h3>Sales Order Terakhir</h3>
+          <table><tbody id="dashLast"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SALES ORDER -->
+    <section id="sales" class="page">
+      <div class="header"><h2>Sales Order</h2></div>
+      <div class="container">
+        <div class="form-group"><label>No SO</label><input id="no_so" readonly></div>
+        <div class="form-group"><label>Customer</label><input id="customer" placeholder="Nama customer"></div>
+        <div id="itemList"></div>
+        <button class="btn-add" onclick="tambahBaris()">＋ Tambah Barang</button>
+      </div>
+      <div class="footer">
+        <b>Total: Rp <span id="total">0</span></b>
+        <button onclick="simpan()" style="width:100%;margin-top:10px;background:var(--primary);color:#fff">Simpan</button>
+      </div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section id="laporan" class="page">
+      <div style="padding:24px">
+        <div class="card">
+          <h2>Laporan Sales Order</h2>
+          <div class="form-group" style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">
+            <div>
+              <label>Dari Tanggal</label>
+              <input type="date" id="tglDari">
+            </div>
+            <div>
+              <label>Sampai Tanggal</label>
+              <input type="date" id="tglSampai">
+            </div>
+            <div>
+              <label>Nama Customer</label>
+              <input type="text" id="searchCustomer" placeholder="Cari customer..." oninput="filterLaporan()">
+            </div>
+            <button onclick="filterLaporan()" style="background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;">Filter</button>
+            <button onclick="resetLaporanFilter()" style="background:#64748b;color:#fff;padding:10px 16px;border-radius:10px;">Reset</button>
+          </div>
+          <table>
+            <thead><tr><th>No SO</th><th>Customer</th><th>Total</th><th>Tanggal</th><th>Aksi</th></tr></thead>
+            <tbody id="laporanData"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MASTER BARANG -->
+    <section id="master" class="page">
+      <div style="padding:24px">
+        <div class="card">
+          <h2>Master Barang</h2>
+          <div class="form-group">
+            <label>Cari Barang</label>
+            <div style="display:flex;gap:6px">
+              <input id="searchMaster" placeholder="Masukkan kode atau nama barang...">
+              <button onclick="cariMasterBarang()" style="background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;">Cari</button>
+              <button onclick="resetMasterBarang()" style="background:#64748b;color:#fff;padding:10px 16px;border-radius:10px;">Reset</button>
+            </div>
+          </div>
+          <button onclick="updateMasterBarang()" style="background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:10px;">Update Database</button>
+          <table>
+            <thead>
+              <tr>
+                <th>Kode</th>
+                <th>Nama Barang</th>
+                <th>Harga</th>
+                <th>Stok</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="masterData"></tbody>
+          </table>
+          <h3>Tambah Barang Baru</h3>
+          <div class="form-group"><label>Kode</label><input id="newKode"></div>
+          <div class="form-group"><label>Nama Barang</label><input id="newNama"></div>
+          <div class="form-group"><label>Harga</label><input type="number" id="newHarga"></div>
+          <div class="form-group"><label>Stok</label><input type="number" id="newStok"></div>
+          <button style="background:var(--success);color:#fff;padding:10px 16px;border-radius:10px;" onclick="tambahBarang()">Tambah Barang</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="loading">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <b>Menyimpan…</b>
+  </div>
+</div>
+
+<script>
+const API="https://script.google.com/macros/s/AKfycbxWzk78A9eIZaxDhzD0a_RwsRV7I5pDo7TScXiIwVhusS4RgmTuRRqZXKpgDEmr8w5KGg/exec"; // Ganti dengan API Anda
+let masterBarang=[], items=[], laporanAll=[];
+
+// ===== UTILITY =====
+function loadingShow(show){document.getElementById('loading').style.display=show?'flex':'none';}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle("collapsed");}
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.menu a').forEach(a=>a.classList.remove('active'));
+  el.classList.add('active');
+  if(id==="dashboard") loadDashboard();
+  if(id==="laporan") loadLaporan();
+  if(id==="master") updateMasterBarang();
+  if(id==="sales") {updateMasterBarang().then(()=>{if(document.getElementById('itemList').children.length===0) tambahBaris();});}
+}
+
+// ===== MASTER BARANG =====
+function loadMasterBarang(data=masterBarang, highlight=""){
+  const tbody = document.getElementById('masterData');
+  tbody.innerHTML = data.map((b, idx)=>{
+    let namaText = b.nama || "";
+    if(highlight){
+      const safe = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${safe})`, "gi");
+      namaText = namaText.replace(regex, `<span class="highlight">$1</span>`);
+    }
+    return `<tr>
+      <td>${b.kode||""}</td>
+      <td ondblclick="inlineEdit(this,'nama',${idx})">${namaText}</td>
+      <td ondblclick="inlineEdit(this,'harga',${idx})">${Number(b.harga||0).toLocaleString()}</td>
+      <td ondblclick="inlineEdit(this,'stok',${idx})">${Number(b.stok||0)}</td>
+      <td>
+        <button onclick="saveInlineEdit(${idx})" style="background:#16a34a;color:#fff;border-radius:8px;padding:4px 8px">Simpan</button>
+        <button onclick="updateMasterBarang()" style="background:#dc2626;color:#fff;border-radius:8px;padding:4px 8px">Batal</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function cariMasterBarang(){
+  const key = document.getElementById("searchMaster").value.trim().toLowerCase();
+  if(!key){ loadMasterBarang(masterBarang); return; }
+  const filtered = masterBarang.filter(b=> (b.kode||"").toLowerCase().includes(key) || (b.nama||"").toLowerCase().includes(key));
+  loadMasterBarang(filtered, key);
+}
+function resetMasterBarang(){document.getElementById("searchMaster").value=""; loadMasterBarang(masterBarang);}
+
+function inlineEdit(cell, field, index){
+  const current = cell.innerText;
+  if(cell.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type = field==='nama'?'text':'number';
+  input.value = (field==='harga'||field==='stok')?Number(current):current;
+  input.style.width="100%";
+  const validate = ()=>{
+    let val = input.value;
+    if(field==='nama'){ val=val.trim(); if(!val){ alert("Nama barang tidak boleh kosong"); input.value=current; return false;}}
+    if(field==='harga'){ val=Number(val); if(val<=0){ alert("Harga harus > 0"); input.value=current; return false;}}
+    if(field==='stok'){ val=Number(val); if(val<0){ alert("Stok tidak boleh negatif"); input.value=current; return false;}}
+    return true;
+  };
+  input.onblur = validate;
+  input.onkeydown = e=>{if(e.key==='Enter'){if(validate()) saveInlineEdit(index);}};
+  cell.innerHTML=""; cell.appendChild(input); input.focus();
+}
+
+async function saveInlineEdit(index){
+  const tr = document.getElementById('masterData').children[index];
+  const kode = masterBarang[index].kode;
+  const namaCell = tr.children[1], hargaCell=tr.children[2], stokCell=tr.children[3];
+  const nama = namaCell.querySelector('input')?.value.trim()||namaCell.innerText;
+  const harga = Number(hargaCell.querySelector('input')?.value||hargaCell.innerText);
+  const stok = Number(stokCell.querySelector('input')?.value||stokCell.innerText);
+  if(!nama||!harga||stok<0){ alert("Isi semua field valid"); return; }
+  try{
+    loadingShow(true);
+    const res = await fetch(API,{method:"POST",body:JSON.stringify({action:"update",item:{kode,nama,harga,stok}})});
+    const data = await res.json();
+    if(data.status==="success"){ alert("Barang berhasil diupdate!"); await updateMasterBarang(); }
+    else alert("Gagal update: "+(data.message||"Error"));
+  }catch(e){alert("Gagal update: "+e.message);} finally{loadingShow(false);}
+}
+
+async function tambahBarang(){
+  const kode = document.getElementById('newKode').value.trim();
+  const nama = document.getElementById('newNama').value.trim();
+  const harga = Number(document.getElementById('newHarga').value);
+  const stok = Number(document.getElementById('newStok').value);
+  if(!kode||!nama||!harga||stok<0){alert("Isi semua field valid"); return;}
+  loadingShow(true);
+  try{
+    const res = await fetch(API,{method:"POST",body:JSON.stringify({action:"add",item:{kode,nama,harga,stok}})});
+    const data = await res.json();
+    if(data.status==="success"){ alert("Barang berhasil ditambahkan!"); await updateMasterBarang(); document.getElementById('newKode').value=document.getElementById('newNama').value=document.getElementById('newHarga').value=document.getElementById('newStok').value=''; }
+    else alert("Gagal menambahkan barang: "+(data.message||"Error"));
+  }catch(e){alert("Gagal menambahkan barang: "+e.message);} finally{loadingShow(false);}
+}
+
+async function updateMasterBarang(){
+  try{
+    loadingShow(true);
+    const res = await fetch(API+"?type=masterbarang");
+    const data = await res.json();
+    masterBarang = data.map(b=>({kode:b.Kode||b.kode||"", nama:b["Nama Barang"]||b.nama||"", harga:Number(b.Harga||b.harga||0), stok:Number(b.Stok||b.stok||0)}));
+    loadMasterBarang();
+    syncHargaSO();
+  }catch(e){alert("Gagal update master: "+e.message);} finally{loadingShow(false);}
+}
+
+// ===== SALES ORDER =====
+function tambahBaris(){
+  const idx = items.length;
+  items.push({nama:'',qty:1,harga:0,diskon:0,subtotal:0});
+  const div = document.createElement('div'); div.className='item-card'; div.id='item-'+idx;
+  div.innerHTML=`
+    <div class="form-group"><label>Barang</label><input placeholder="Nama barang" oninput="setNama(${idx},this.value)"></div>
+    <div class="item-row">
+      <input type="number" min="1" value="1" style="width:60px" onchange="setQty(${idx},this.value)">
+      <input type="number" min="0" value="0" placeholder="Harga" style="width:80px" onchange="setHarga(${idx},this.value)">
+      <input type="number" min="0" value="0" placeholder="Diskon" style="width:80px" onchange="setDiskon(${idx},this.value)">
+      <span class="subtotal">Subtotal: Rp <span id="sub-${idx}">0</span></span>
+      <button class="btn-delete" onclick="hapusItem(${idx})">×</button>
+    </div>`;
+  document.getElementById('itemList').appendChild(div);
+}
+
+function setNama(idx,val){items[idx].nama=val; syncHargaSO();}
+function setQty(idx,val){items[idx].qty=Number(val); hitungSubtotal(idx);}
+function setHarga(idx,val){items[idx].harga=Number(val); hitungSubtotal(idx);}
+function setDiskon(idx,val){items[idx].diskon=Number(val); hitungSubtotal(idx);}
+
+function hitungSubtotal(idx){
+  const item=items[idx]; if(!item) return;
+  item.subtotal=(item.harga*item.qty)-item.diskon; if(item.subtotal<0) item.subtotal=0;
+  document.getElementById('sub-'+idx).innerText=item.subtotal.toLocaleString();
+  updateTotal();
+}
+
+function updateTotal(){let total=0; items.forEach(i=>i&&i.subtotal&&(total+=i.subtotal)); document.getElementById('total').innerText=total.toLocaleString();}
+
+function hapusItem(idx){items[idx]=null; document.getElementById('item-'+idx).remove(); updateTotal();}
+
+function syncHargaSO(){
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const inputNama = card.querySelector("input");
+    if(!inputNama) return;
+    const nama = inputNama.value;
+    const barang = masterBarang.find(b=>b.nama===nama);
+    if(barang){
+      card.querySelectorAll("input")[1].value=barang.harga;
+      const qtyInput=card.querySelectorAll("input")[0];
+      if(Number(qtyInput.value)>barang.stok){ qtyInput.value=barang.stok; alert("Qty disesuaikan sesuai stok"); }
+      hitungSubtotal(items.findIndex(i=>i&&i.nama===nama));
+    }
+  });
+}
+
+async function simpan(){
+  const customer = document.getElementById('customer').value;
+  if(!customer){alert('Isi customer');return;}
+  const filtered = items.filter(i=>i);
+  if(filtered.length===0){alert('Isi barang');return;}
+  loadingShow(true);
+  const payload={customer,no_so:document.getElementById('no_so').value,items:filtered};
+  try{
+    const res = await fetch(API,{method:'POST',body:JSON.stringify(payload)});
+    const data = await res.json();
+    if(data.status==='success'){alert('SO berhasil disimpan: '+data.no_so); items=[]; document.getElementById('itemList').innerHTML=''; updateTotal();}
+    else alert(data.message||'Error');
+  }catch(e){alert('Gagal simpan: '+e.message);}finally{loadingShow(false);}
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard(){
+  loadingShow(true);
+  try{
+    const res = await fetch(`${API}?type=salesorder`);
+    const data = await res.json();
+    document.getElementById('dashSO').innerText=data.length;
+    const totalOmzet=data.reduce((a,b)=>a+b.Total,0);
+    document.getElementById('dashOmzet').innerText=totalOmzet.toLocaleString();
+    const avg = data.length?Math.round(totalOmzet/data.length):0;
+    document.getElementById('dashAvg').innerText=avg.toLocaleString();
+    const tbody=document.getElementById('dashLast'); tbody.innerHTML='';
+    data.slice(-5).reverse().forEach(d=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${d['No SO']}</td><td>${d.Customer}</td><td>Rp ${d.Total.toLocaleString()}</td>`;
+      tbody.appendChild(tr);
+    });
+  }catch(e){alert('Gagal load dashboard: '+e.message);}finally{loadingShow(false);}
+}
+
+// ===== LAPORAN =====
+async function loadLaporan(){
+  loadingShow(true);
+  try{
+    const res = await fetch(`${API}?type=salesorder`);
+    const data = await res.json();
+    laporanAll = data.reverse();
+    renderLaporan(laporanAll);
+  }catch(e){alert('Gagal load laporan: '+e.message);}finally{loadingShow(false);}
+}
+
+function renderLaporan(data){
+  const tbody = document.getElementById('laporanData'); tbody.innerHTML='';
+  const seen = new Set();
+  data.forEach(d=>{
+    if(seen.has(d['No SO'])) return;
+    seen.add(d['No SO']);
+    const t = new Date(d.Tanggal);
+    const tanggalFormatted = t.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${d['No SO']}</td>
+      <td>${d.Customer}</td>
+      <td>Rp ${d.Total.toLocaleString()}</td>
+      <td>${tanggalFormatted}</td>
+      <td><button onclick="printInvoice('${d['No SO']}')">Cetak</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterLaporan(){
+  const dari=document.getElementById('tglDari').value;
+  const sampai=document.getElementById('tglSampai').value;
+  const search=document.getElementById('searchCustomer').value.toLowerCase();
+  const filtered=laporanAll.filter(d=>{
+    const t=new Date(d.Tanggal);
+    if(dari&&t<new Date(dari)) return false;
+    if(sampai&&t>new Date(sampai)) return false;
+    if(search&&!d.Customer.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  renderLaporan(filtered);
+}
+
+function resetLaporanFilter(){
+  document.getElementById('tglDari').value='';
+  document.getElementById('tglSampai').value='';
+  document.getElementById('searchCustomer').value='';
+  renderLaporan(laporanAll);
+}
+
+// ===== TERBILANG =====
+function terbilang(angka){
+  const huruf=["","Satu","Dua","Tiga","Empat","Lima","Enam","Tujuh","Delapan","Sembilan","Sepuluh","Sebelas"];
+  angka=Number(angka);
+  if(angka<12) return huruf[angka];
+  else if(angka<20) return terbilang(angka-10)+" Belas";
+  else if(angka<100) return terbilang(Math.floor(angka/10))+" Puluh "+terbilang(angka%10);
+  else if(angka<200) return "Seratus "+terbilang(angka-100);
+  else if(angka<1000) return terbilang(Math.floor(angka/100))+" Ratus "+terbilang(angka%100);
+  else if(angka<2000) return "Seribu "+terbilang(angka-1000);
+  else if(angka<1000000) return terbilang(Math.floor(angka/1000))+" Ribu "+terbilang(angka%1000);
+  else if(angka<1000000000) return terbilang(Math.floor(angka/1000000))+" Juta "+terbilang(angka%1000000);
+  else return "";
+}
+
+function terbilangDecimal(angka){
+  angka=Number(angka).toFixed(2);
+  let parts=angka.split('.');
+  let bilangan=Number(parts[0]);
+  let desimal=Number(parts[1]);
+  let hasil=terbilang(bilangan);
+  if(desimal>0) hasil+=" koma "+terbilang(desimal);
+  return hasil.trim();
+}
+
+// ===== PRINT INVOICE =====
+async function printInvoice(no){
+  loadingShow(true);
+  try{
+    const res=await fetch(`${API}?type=salesorder`);
+    const allData=await res.json();
+    const itemsSO=allData.filter(d=>d['No SO']===no);
+    if(itemsSO.length===0){loadingShow(false);alert('Data tidak ditemukan');return;}
+    const tObj=new Date(itemsSO[0].Tanggal);
+    const tanggal=tObj.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const customer=itemsSO[0].Customer;
+    const total=itemsSO[0].Total;
+    const logoURL="img/logo.png";
+    let html=`<html><head><title>Invoice ${no}</title>
+      <style>
+        body{font-family:Arial;padding:20px;color:#0f172a}
+        h2,h3{margin:4px 0}
+        table{width:100%;border-collapse:collapse;margin-top:14px}
+        th,td{border:1px solid #000;padding:6px;text-align:left}
+        th{text-align:center}
+        .right{text-align:right}
+        .total{font-weight:900;font-size:18px}
+        .terbilang{font-style:italic;margin-top:4px}
+        .header-logo{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+        .header-logo img{height:60px}
+      </style></head><body>
+      <div class="header-logo">
+        <img src="${logoURL}" alt="Logo">
+        <div><h2>CV. Ihsan Sukses Abadi</h2><h3>Invoice: ${no}</h3></div>
+      </div>
+      <p>Tanggal: ${tanggal}</p>
+      <p>Customer: ${customer}</p>
+      <table>
+        <thead><tr><th>No</th><th>Barang</th><th>Qty</th><th>Harga</th><th>Diskon</th><th>Subtotal</th></tr></thead>
+        <tbody>`;
+    itemsSO.forEach((i,idx)=>{
+      let diskonDisplay = Number(i.Diskon)<=100?`${i.Diskon}%`:`Rp ${Number(i.Diskon).toLocaleString('id-ID')}`;
+      html+=`<tr>
+        <td>${idx+1}</td>
+        <td>${i.Barang}</td>
+        <td>${i.Qty}</td>
+        <td>Rp ${Number(i.Harga).toLocaleString('id-ID')}</td>
+        <td>${diskonDisplay}</td>
+        <td>Rp ${Number(i.Subtotal).toLocaleString('id-ID')}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table>
+      <p class="total">Total: Rp ${Number(total).toLocaleString('id-ID')}</p>
+      <p class="terbilang">Terbilang: ${terbilangDecimal(total)} Rupiah</p>
+      <p>Terima kasih atas kepercayaan Anda!</p>
+      </body></html>`;
+    const w=window.open(); w.document.write(html); w.document.close(); w.print();
+  }catch(e){alert('Gagal cetak: '+e.message);}finally{loadingShow(false);}
+}
+
+// Inisialisasi awal
+document.addEventListener('DOMContentLoaded',()=>{updateMasterBarang(); loadDashboard(); loadLaporan();});
+</script>
+</body>
+</html>

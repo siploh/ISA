@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bawah Tangga Production</title>
+<style>
+:root{
+  --primary:#2563eb;
+  --success:#16a34a;
+  --danger:#dc2626;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:var(--bg);color:var(--text)}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:240px;background:#020617;color:#e5e7eb;padding:20px;transition:.3s}
+.sidebar.collapsed{width:70px}
+.logo{font-weight:900;margin-bottom:30px}
+.menu a{display:block;padding:12px;border-radius:10px;color:#cbd5f5;text-decoration:none;margin-bottom:6px;cursor:pointer}
+.menu a.active,.menu a:hover{background:#1e40af;color:#fff}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{background:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.toggle{cursor:pointer;font-size:18px}
+.page{display:none;flex:1;overflow:auto}
+.page.active{display:block}
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.08);margin-bottom:18px}
+small{color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.header{position:sticky;top:0;background:#fff;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.08);z-index:10}
+.container{padding:16px;padding-bottom:180px}
+.form-group{margin-bottom:14px}
+label{font-size:12px;color:var(--muted);font-weight:600}
+input{width:100%;margin-top:6px;padding:12px;border-radius:14px;border:1px solid var(--border)}
+input[readonly]{background:#f8fafc}
+.item-card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.item-row{display:flex;justify-content:space-between;gap:10px;margin-top:10px}
+.stok{font-size:12px;color:var(--muted)}
+.subtotal{font-weight:900;color:var(--primary)}
+button{border:none;border-radius:16px;padding:14px;font-weight:700;cursor:pointer}
+.btn-add{width:100%;background:var(--success);color:#fff;margin-top:10px}
+.btn-delete{background:var(--danger);color:#fff}
+.footer{position:fixed;bottom:0;left:240px;right:0;background:#fff;padding:16px;box-shadow:0 -4px 12px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:8px}
+.sidebar.collapsed ~ .main .footer{left:70px}
+.dropdown{position:relative}
+.dropdown-list{position:absolute;top:100%;left:0;right:0;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.15);max-height:200px;overflow:auto;z-index:50;display:none}
+.dropdown-list div{padding:12px;border-bottom:1px solid #f1f5f9;cursor:pointer}
+.dropdown-list div:hover{background:#f1f5f9}
+#loading{position:fixed;inset:0;background:rgba(15,23,42,.6);display:none;align-items:center;justify-content:center;z-index:9999}
+.loader-box{background:#fff;padding:24px;border-radius:18px;text-align:center;width:230px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.spinner{width:42px;height:42px;border:4px solid #e5e7eb;border-top:4px solid var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">BAWAH TANGGA</div>
+    <nav class="menu">
+      <a class="active" onclick="showPage('dashboard',this)">Dashboard</a>
+      <a onclick="showPage('sales',this)">Sales Order</a>
+      <a onclick="showPage('laporan',this)">Laporan</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="toggle" onclick="toggleSidebar()">☰</div>
+      <b>CV. Ihsan Sukses Abadi</b>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="page active">
+      <div style="padding:24px">
+        <div class="grid">
+          <div class="card">
+            <small>Total Sales Order</small>
+            <h2 id="dashSO">0</h2>
+          </div>
+          <div class="card">
+            <small>Total Omzet</small>
+            <h2>Rp <span id="dashOmzet">0</span></h2>
+          </div>
+          <div class="card">
+            <small>Rata-rata</small>
+            <h2>Rp <span id="dashAvg">0</span></h2>
+          </div>
+        </div>
+        <div class="card" style="margin-top:24px">
+          <h3>Sales Order Terakhir</h3>
+          <table>
+            <tbody id="dashLast"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SALES ORDER -->
+    <section id="sales" class="page">
+      <div class="header"><h2>Sales Order</h2></div>
+      <div class="container">
+        <div class="form-group">
+          <label>No SO</label>
+          <input id="no_so" readonly>
+        </div>
+        <div class="form-group">
+          <label>Customer</label>
+          <input id="customer" placeholder="Nama customer">
+        </div>
+        <div id="itemList"></div>
+        <button class="btn-add" onclick="tambahBaris()">＋ Tambah Barang</button>
+      </div>
+      <div class="footer">
+        <b>Total: Rp <span id="total">0</span></b>
+        <button onclick="simpan()" style="width:100%;margin-top:10px;background:var(--primary);color:#fff">Simpan</button>
+      </div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section id="laporan" class="page">
+      <div style="padding:24px">
+        <div class="card">
+          <h2>Laporan Sales Order</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>No SO</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="laporanData"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <b>Menyimpan Sales Order…</b>
+  </div>
+</div>
+
+<script>
+const URL_API="https://script.google.com/macros/s/AKfycbzvg6-OlMe1wtM8wiDSp8rc1R_97keM-kSFO_JseCa_Lco90AFtKGujuHFeHqdgTArR_A/exec";
+let masterBarang=[];
+
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.menu a').forEach(a=>a.classList.remove('active'));
+  el.classList.add('active');
+  if(id==="dashboard") loadDashboard();
+  if(id==="laporan") loadLaporan();
+}
+function toggleSidebar(){sidebar.classList.toggle("collapsed");}
+
+/* DASHBOARD */
+async function loadDashboard(){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder");
+    const raw=await res.json();
+    const data = raw.map(r=>({
+      tanggal:r["Tanggal"]||r["tanggal"]||"",
+      no_so:r["No SO"]||r["no_so"]||"",
+      customer:r["Customer"]||r["customer"]||"",
+      barang:r["Barang"]||r["barang"]||"",
+      qty:Number(r["Qty"]||r["qty"]||0),
+      harga:Number(r["Harga"]||r["harga"]||0),
+      subtotal:Number(r["Subtotal"]||r["subtotal"]||0),
+      total:Number(r["Total"]||r["total"]||0)
+    }));
+    const map={};
+    data.forEach(r=>{
+      if(!r.no_so) return;
+      if(!map[r.no_so]) map[r.no_so]={no_so:r.no_so,customer:r.customer,total:0};
+      map[r.no_so].total+=r.total;
+    });
+    const grouped=Object.values(map);
+    let omzet=0; grouped.forEach(d=>omzet+=d.total);
+    dashSO.innerText=grouped.length;
+    dashOmzet.innerText=omzet.toLocaleString("id-ID");
+    dashAvg.innerText=grouped.length?Math.round(omzet/grouped.length).toLocaleString("id-ID"):"0";
+    dashLast.innerHTML="";
+    grouped.slice(-5).reverse().forEach(d=>{
+      dashLast.innerHTML+=`<tr>
+        <td>${d.no_so}</td>
+        <td>${d.customer||"-"}</td>
+        <td>Rp ${d.total.toLocaleString("id-ID")}</td>
+      </tr>`;
+    });
+  }catch(e){
+    dashSO.innerText=dashOmzet.innerText=dashAvg.innerText="0";
+    dashLast.innerHTML="<tr><td colspan=3>Error load data</td></tr>";
+  }
+}
+
+/* LAPORAN */
+async function loadLaporan(){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder");
+    const raw=await res.json();
+    const data=raw.map(r=>({
+      no_so:r["No SO"]||r["no_so"]||"",
+      customer:r["Customer"]||r["customer"]||"",
+      total:Number(r["Total"]||r["total"]||0)
+    }));
+    const map={};
+    data.forEach(r=>{
+      if(!r.no_so) return;
+      if(!map[r.no_so]) map[r.no_so]={no_so:r.no_so,customer:r.customer,total:0};
+      map[r.no_so].total+=r.total;
+    });
+    const grouped=Object.values(map);
+    laporanData.innerHTML=grouped.map(d=>`<tr>
+      <td>${d.no_so}</td>
+      <td>${d.customer||"-"}</td>
+      <td>Rp ${d.total.toLocaleString("id-ID")}</td>
+      <td><button onclick="printInvoice('${d.no_so}')">Print</button></td>
+    </tr>`).join("");
+  }catch(e){
+    laporanData.innerHTML="<tr><td colspan=4>Error load data</td></tr>";
+  }
+}
+
+/* SALES ORDER FORM */
+async function initForm(){
+  try{
+    masterBarang=await (await fetch(URL_API)).json();
+    const so=await (await fetch(URL_API+"?type=so")).json();
+    no_so.value=so.no_so;
+    tambahBaris();
+  }catch(e){alert("Gagal load data")}
+}
+
+function tambahBaris(){
+  const d=document.createElement("div");
+  d.className="item-card";
+  d.innerHTML=`
+    <div class="dropdown">
+      <input placeholder="Cari barang..." oninput="filterBarang(this)">
+      <div class="dropdown-list"></div>
+    </div>
+    <div class="item-row">
+      <span class="stok">Stok: <b>0</b></span>
+      <input type="number" value="1" min="1" oninput="hitung()">
+    </div>
+    <div class="item-row">
+      <input type="number" readonly placeholder="Harga">
+      <span class="subtotal">0</span>
+    </div>
+    <div class="item-row">
+      <button class="btn-delete" onclick="this.closest('.item-card').remove();hitung()">Hapus</button>
+    </div>
+  `;
+  itemList.appendChild(d);
+}
+
+function filterBarang(input){
+  const list=input.nextElementSibling;
+  const key=input.value.toLowerCase();
+  list.innerHTML="";
+  if(!key){list.style.display="none"; return;}
+  masterBarang.filter(b=>b.nama.toLowerCase().includes(key)).forEach(b=>{
+    const div=document.createElement("div");
+    div.textContent=b.nama;
+    div.onclick=()=>{
+      input.value=b.nama;
+      const card=input.closest(".item-card");
+      card.querySelector(".stok b").innerText=b.stok;
+      card.querySelector("input[readonly]").value=b.harga;
+      list.style.display="none"; hitung();
+    };
+    list.appendChild(div);
+  });
+  list.style.display="block";
+}
+
+document.addEventListener("click",e=>{
+  document.querySelectorAll(".dropdown-list").forEach(d=>{
+    if(!d.contains(e.target)&&!d.previousElementSibling.contains(e.target))
+      d.style.display="none";
+  });
+});
+
+function hitung(){
+  let totalSum=0;
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const stok=Number(card.querySelector(".stok b").innerText)||0;
+    const qtyInput=card.querySelector("input[type=number]:not([readonly])");
+    let qty=Number(qtyInput.value)||0;
+    const harga=Number(card.querySelector("input[readonly]").value)||0;
+    if(qty>stok && stok>0){ qty=stok; qtyInput.value=stok; alert("Qty melebihi stok"); }
+    const subtotal=qty*harga;
+    card.querySelector(".subtotal").innerText=subtotal.toLocaleString("id-ID");
+    totalSum+=subtotal;
+  });
+  total.innerText=totalSum.toLocaleString("id-ID");
+}
+
+function simpan(){
+  const items=[];
+  let totalSum=0;
+  document.querySelectorAll(".item-card").forEach(card=>{
+    const nama=card.querySelector(".dropdown input").value;
+    const qty=Number(card.querySelector("input[type=number]:not([readonly])").value);
+    const harga=Number(card.querySelector("input[readonly]").value);
+    if(!nama||!qty||!harga) return;
+    const subtotal=qty*harga;
+    totalSum+=subtotal;
+    items.push({nama,qty,harga,subtotal});
+  });
+  if(!customer.value){alert("Isi nama customer");return;}
+  if(items.length===0){alert("Minimal 1 barang");return;}
+  loading.style.display="flex";
+  fetch(URL_API,{method:"POST",body:JSON.stringify({no_so:no_so.value,customer:customer.value,total:totalSum,items})})
+    .then(r=>r.json()).then(res=>{
+      if(res.status==="success"){alert("Sales Order berhasil disimpan");customer.value="";itemList.innerHTML="";total.innerText="0";}
+      return fetch(URL_API+"?type=so");
+    }).then(r=>r.json()).then(d=>{no_so.value=d.no_so;tambahBaris();})
+    .catch(()=>alert("Gagal menyimpan")).finally(()=>loading.style.display="none");
+}
+
+/* PRINT INVOICE */
+async function printInvoice(noSO){
+  try{
+    const res=await fetch(URL_API+"?type=salesorder");
+    const raw=await res.json();
+    const data = raw.filter(r=>(r["No SO"]||r["no_so"])===noSO);
+    if(data.length===0){alert("Data tidak ditemukan"); return;}
+    
+    const customer = data[0]["Customer"]||data[0]["customer"]||"-";
+    const tanggal = data[0]["Tanggal"]||data[0]["tanggal"]||"-";
+    const items = data.map(r=>({
+      nama: r["Barang"]||r["barang"]||"",
+      qty: Number(r["Qty"]||r["qty"]||0),
+      harga: Number(r["Harga"]||r["harga"]||0),
+      subtotal: Number(r["Subtotal"]||r["subtotal"]||0)
+    }));
+    const total = items.reduce((a,b)=>a+b.subtotal,0);
+
+    const html = `
+      <html>
+      <head>
+        <title>Invoice ${noSO}</title>
+        <style>
+          body{font-family:Arial,sans-serif;padding:20px;color:#000}
+          header{display:flex;align-items:center;margin-bottom:20px}
+          header img{height:50px;margin-right:15px}
+          h1{margin:0;font-size:24px;color:var(--primary)}
+          h3{margin:5px 0;font-weight:normal;color:#555}
+          table{width:100%;border-collapse:collapse;margin-top:20px}
+          th,td{border:1px solid #333;padding:8px;text-align:left}
+          th{background:#f0f0f0}
+          tfoot td{font-weight:bold}
+          .total-row td{font-size:16px}
+          footer{margin-top:20px;font-size:12px;color:#555;text-align:center}
+        </style>
+      </head>
+      <body>
+        <header>
+          <img src="img/logo.png" alt="Logo">
+          <div>
+            <h1>CV. Ihsan Sukses Abadi</h1>
+            <h3>Invoice: ${noSO}</h3>
+          </div>
+        </header>
+
+        <div>
+          <p><strong>Customer:</strong> ${customer}</p>
+          <p><strong>Tanggal:</strong> ${tanggal}</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Barang</th>
+              <th>Qty</th>
+              <th>Harga</th>
+              <th>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((i,idx)=>`<tr>
+              <td>${idx+1}</td>
+              <td>${i.nama}</td>
+              <td>${i.qty}</td>
+              <td>Rp ${i.harga.toLocaleString("id-ID")}</td>
+              <td>Rp ${i.subtotal.toLocaleString("id-ID")}</td>
+            </tr>`).join("")}
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td colspan=4>Total</td>
+              <td>Rp ${total.toLocaleString("id-ID")}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <footer>
+          Terima kasih telah melakukan transaksi dengan CV. Ihsan Sukses Abadi.<br>
+          Invoice ini dicetak secara otomatis dan berlaku sebagai bukti pembayaran.
+        </footer>
+      </body>
+      </html>
+    `;
+    
+    const w=window.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }catch(e){alert("Gagal print invoice: "+e.message);}
+}
+
+window.onload=initForm;
+</script>
+</body>
+</html>
